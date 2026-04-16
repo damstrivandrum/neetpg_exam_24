@@ -4,7 +4,7 @@
 
 // ✅ Google Apps Script Web App URL
 window.API_URL =
-  "https://script.google.com/macros/s/AKfycbyrR6uJDuFZBkbrtbjiTuIrKB31alvPWVmz4znmccpqPR_u1TLIqxYfziq9QJObdWBL/exec";
+  "https://script.google.com/macros/s/AKfycbxvFcqf2Txf0cOVKL5t-e7T6tZdY6AL6WpMHmKyZiYEer-yyjWpe2spqCQpUTgQTkCX/exec";
 
 // ✅ Exam settings
 window.EXAM_DURATION_MIN = 180;
