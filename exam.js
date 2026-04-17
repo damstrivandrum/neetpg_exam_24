@@ -10,6 +10,7 @@
   ✅ FIX: Wrong answers marking (MARKS_WRONG = -1 works correctly)
   ✅ FIX: Login/refresh should NOT reset timer or violations (per-candidate+window key)
   ✅ FIX: startedAt / endedAt sent as exact Indian time using Asia/Kolkata
+  ✅ FIX: violations are posted to Apps Script and saved in Violations sheet
 ***********************/
 
 function safeParse(s){ try{ return JSON.parse(s) }catch{ return null } }
@@ -450,34 +451,7 @@ if(submitBtn){
   });
 }
 
-// ====== Proctoring ======
-function addViolation(reason){
-  if(!canCountViolation()) return;
-
-  state.violations = (state.violations || 0) + 1;
-  save();
-  if(elVio) elVio.textContent = String(state.violations);
-
-  if(window.PROCTOR_BLUR === true){
-    document.body.classList.add("proctor-blur");
-    setTimeout(() => document.body.classList.remove("proctor-blur"), 1500);
-  }
-
-  const maxV = Number.isFinite(window.MAX_VIOLATIONS) ? window.MAX_VIOLATIONS : null;
-  if(maxV && state.violations >= maxV){
-    submitExam(true, "MAX_VIOLATIONS");
-  }
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") addViolation("TAB_SWITCH");
-});
-window.addEventListener("blur", () => {
-  if(IS_IOS) return;
-  addViolation("WINDOW_BLUR");
-});
-
-// ====== Submit helper ======
+// ====== API helpers ======
 async function postAPI(payload){
   const API_URL = window.API_URL || window.EXAM_API_URL || "";
   if(!API_URL) throw new Error("API_URL not set in config.js");
@@ -504,6 +478,49 @@ async function postAPI(payload){
     clearTimeout(t);
   }
 }
+
+async function postViolation(type, details = ""){
+  try{
+    await postAPI({
+      action: "violation",
+      token: cand.token,
+      candidateId: cand.candidateId || cand.id || "",
+      type,
+      details
+    });
+  }catch(err){
+    console.log("Violation log failed:", err);
+  }
+}
+
+// ====== Proctoring ======
+function addViolation(reason){
+  if(!canCountViolation()) return;
+
+  state.violations = (state.violations || 0) + 1;
+  save();
+  if(elVio) elVio.textContent = String(state.violations);
+
+  postViolation(reason, `Violation detected during exam. Count=${state.violations}`);
+
+  if(window.PROCTOR_BLUR === true){
+    document.body.classList.add("proctor-blur");
+    setTimeout(() => document.body.classList.remove("proctor-blur"), 1500);
+  }
+
+  const maxV = Number.isFinite(window.MAX_VIOLATIONS) ? window.MAX_VIOLATIONS : null;
+  if(maxV && state.violations >= maxV){
+    submitExam(true, "MAX_VIOLATIONS");
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") addViolation("TAB_SWITCH");
+});
+window.addEventListener("blur", () => {
+  if(IS_IOS) return;
+  addViolation("WINDOW_BLUR");
+});
 
 // ====== Submit ======
 async function submitExam(isAuto=false, reason="SUBMIT"){
@@ -557,7 +574,6 @@ async function submitExam(isAuto=false, reason="SUBMIT"){
       return;
     }
 
-    // ✅ Lock submission locally
     localStorage.setItem("neet_submitted", "yes");
     localStorage.setItem("neet_result", JSON.stringify({
       name: cand.name || "",
@@ -572,7 +588,6 @@ async function submitExam(isAuto=false, reason="SUBMIT"){
       endedAt: formatIndianTime(Date.now())
     }));
 
-    // ✅ Clear saved exam state only after success
     try{ localStorage.removeItem(KEY); }catch{}
     try{ localStorage.removeItem(LEGACY_KEY); }catch{}
 
